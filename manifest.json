@@ -2,7 +2,7 @@
   "name": "Sub Tracker",
   "short_name": "SubTracker",
   "description": "Soccer substitution and playing time tracker",
-  "start_url": "/",
+  "start_url": "/sub-tracker/"
   "display": "fullscreen",
   "orientation": "portrait",
   "background_color": "#f4f3ef",
