@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Sub Tracker</title>
+<link rel="manifest" href="manifest.json">
+<style>
+  /* ── Reset & base ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: #f4f3ef;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 14px;
+    color: #1a1a1a;
+    touch-action: none;
+  }
+
+  /* ── Screens ── */
+  .screen { display: none; width: 100%; height: 100%; flex-direction: column; overflow: hidden; }
+  .screen.active { display: flex; }
+
+  /* ══════════════════════════════════
+     SETUP SCREEN
+  ══════════════════════════════════ */
+  #setup { padding: 12px 14px; gap: 8px; }
+  .setup-title { font-size: 17px; font-weight: 600; color: #111; }
+  .setup-sub { font-size: 12px; color: #888; margin-top: 1px; }
+
+  .roster-preset-bar { display: flex; gap: 6px; align-items: center; }
+  .preset-label { font-size: 11px; color: #888; white-space: nowrap; }
+  .preset-btn { font-size: 12px; padding: 5px 10px; border-radius: 20px;
+    background: #e8f0fc; color: #2a5ccf; border: 1px solid #b8cefc; cursor: pointer; white-space: nowrap; }
+  .preset-btn:active { opacity: 0.7; }
+
+  .roster-scroll { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  table { width: 100%; border-collapse: collapse; }
+  th { font-size: 11px; color: #888; font-weight: 500; text-align: left; padding: 4px 4px 4px 0;
+       border-bottom: 1px solid #e0ddd8; }
+  td { padding: 5px 3px 5px 0; vertical-align: middle; border-bottom: 1px solid #f0ede8; }
+  input[type=text], input[type=number] {
+    border: 1px solid #d8d5d0; border-radius: 7px; padding: 5px 7px;
+    font-size: 13px; background: #fff; color: #1a1a1a; width: 100%;
+    -webkit-appearance: none;
+  }
+  .num-input { width: 44px !important; text-align: center; }
+  .role-btn { padding: 4px 8px; font-size: 11px; border-radius: 20px; cursor: pointer; border: 1px solid #ccc; background: #f5f5f5; color: #555; }
+  .role-btn.keeper { background: #fff8e0; color: #8a6500; border-color: #e0c060; }
+  .del-btn { background: none; border: none; color: #bbb; font-size: 16px; cursor: pointer; padding: 2px 6px; }
+
+  .add-row { display: flex; gap: 6px; align-items: center; }
+  .add-row input[type=text] { flex: 1; }
+
+  .btn { border: none; border-radius: 10px; padding: 10px 16px; font-size: 14px;
+    font-weight: 600; cursor: pointer; -webkit-appearance: none; }
+  .btn-primary { background: #2a5ccf; color: #fff; width: 100%; padding: 13px; font-size: 15px; }
+  .btn-primary:active { opacity: 0.85; }
+  .btn-small { background: #e8f0fc; color: #2a5ccf; font-size: 12px; padding: 6px 12px;
+    border-radius: 8px; font-weight: 500; border: none; cursor: pointer; }
+  .btn-small:active { opacity: 0.7; }
+  .btn-danger { background: #fdecea; color: #c0392b; }
+
+  .setup-err { font-size: 12px; color: #c0392b; text-align: center; min-height: 16px; }
+
+  /* ══════════════════════════════════
+     GAME SCREEN
+  ══════════════════════════════════ */
+  #game { padding: 8px 10px 6px; gap: 5px; }
+
+  /* Top bar */
+  .top-bar { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .timer { font-size: 24px; font-weight: 700; color: #111; min-width: 62px; font-variant-numeric: tabular-nums; }
+  .top-bar .btn { padding: 7px 14px; font-size: 13px; font-weight: 600; border-radius: 9px; }
+  .btn-start { background: #2a5ccf; color: #fff; }
+  .btn-pause { background: #fdecea; color: #c0392b; }
+  .btn-resume { background: #2a5ccf; color: #fff; }
+  .btn-reset { background: #f0ede8; color: #555; }
+  .btn-edit  { background: #f0ede8; color: #555; margin-left: auto; }
+
+  /* Stats */
+  .stats-row { display: flex; gap: 5px; flex-shrink: 0; }
+  .stat { flex: 1; background: #fff; border-radius: 8px; padding: 5px 6px; text-align: center;
+    border: 1px solid #e8e5e0; }
+  .stat-val { font-size: 13px; font-weight: 600; color: #111; }
+  .stat-lbl { font-size: 10px; color: #999; margin-top: 1px; }
+  .stat-val.warn { color: #c07000; }
+
+  /* Suggest */
+  .suggest-bar { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .suggest-text { font-size: 11px; color: #666; flex: 1; min-height: 16px; }
+  .suggest-text b { color: #2a5ccf; }
+
+  /* Pitch */
+  .pitch-wrap {
+    flex: 1;
+    background: #2e7d3a;
+    border-radius: 10px;
+    border: 2px solid #1e5a28;
+    display: flex;
+    flex-direction: column;
+    padding: 3px 4px;
+    gap: 0;
+    overflow: hidden;
+    min-height: 0;
+  }
+  .pitch-zone {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .pitch-zone-label {
+    font-size: 9px; color: rgba(255,255,255,0.4);
+    text-transform: uppercase; letter-spacing: 0.5px;
+    text-align: center; line-height: 1.6; flex-shrink: 0;
+  }
+  .pitch-row {
+    flex: 1;
+    display: flex; justify-content: center; align-items: center;
+    gap: 5px; padding: 2px 4px;
+    border-radius: 6px;
+    transition: background 0.1s, outline 0.1s;
+    min-height: 0;
+  }
+  .pitch-row.drag-over { background: rgba(255,255,255,0.12); outline: 1.5px dashed rgba(255,255,255,0.7); outline-offset: -2px; }
+  .pitch-row.drop-blocked { background: rgba(220,60,60,0.1); outline: 1.5px dashed rgba(220,60,60,0.7); outline-offset: -2px; }
+  .pitch-divider { border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 0 6px; flex-shrink: 0; }
+
+  /* Bench */
+  .bench-wrap { flex-shrink: 0; background: #fff; border-radius: 9px; border: 1px solid #e8e5e0; padding: 5px 7px; }
+  .bench-header { font-size: 11px; font-weight: 600; color: #888; margin-bottom: 4px; }
+  .bench-row {
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 5px;
+    min-height: 46px; padding: 2px;
+    border-radius: 6px; border: 1.5px dashed #ddd;
+    transition: border-color 0.1s;
+    align-items: center;
+  }
+  .bench-row.drag-over { border-color: #2a5ccf; background: #f0f4ff; }
+
+  /* Player cards */
+  .player {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    border-radius: 7px; cursor: grab; user-select: none;
+    border: 1.5px solid rgba(255,255,255,0.25);
+    touch-action: none;
+    padding: 2px 2px;
+    transition: outline 0.1s;
+    /* Size set by JS based on screen */
+    width: 52px; min-height: 54px;
+  }
+  .player:active { cursor: grabbing; }
+  .player.on-pitch { background: rgba(255,255,255,0.2); color: #fff; }
+  .player.keeper.on-pitch { background: rgba(255,200,0,0.35); border-color: rgba(255,200,0,0.7); }
+  .player.on-bench { background: #fff; color: #1a1a1a; border-color: #e0ddd8; }
+  .player.keeper.on-bench { background: #fffbe8; border-color: #e0c060; }
+  .player.dragging { opacity: 0.2; }
+  .player.drop-target { outline: 2px solid #fff; outline-offset: 1px; }
+  .player.on-bench.drop-target { outline: 2px solid #2a5ccf; }
+  .p-pos { font-size: 10px; font-weight: 700; opacity: 0.75; line-height: 1.2; }
+  .p-name { font-size: 10px; text-align: center; overflow: hidden; white-space: nowrap;
+    text-overflow: ellipsis; max-width: 50px; line-height: 1.2; }
+  .p-time { font-size: 9px; opacity: 0.7; line-height: 1.3; text-align: center; }
+
+  /* Sub log (collapsible) */
+  .log-wrap { flex-shrink: 0; }
+  .log-toggle { display: flex; align-items: center; justify-content: space-between;
+    font-size: 11px; font-weight: 600; color: #888; cursor: pointer;
+    padding: 3px 0; user-select: none; }
+  .log-toggle .arrow { font-size: 10px; transition: transform 0.2s; }
+  .log-toggle.open .arrow { transform: rotate(180deg); }
+  .log-body { overflow: hidden; max-height: 0; transition: max-height 0.25s ease; }
+  .log-body.open { max-height: 80px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .log-entry { font-size: 11px; color: #777; padding: 2px 0; border-bottom: 1px solid #f0ede8; }
+  .log-entry:last-child { border-bottom: none; }
+  .log-empty { font-size: 11px; color: #bbb; }
+
+  .notice {
+    background: #fdecea; color: #c0392b; border-radius: 8px;
+    padding: 5px 10px; font-size: 12px; flex-shrink: 0;
+    display: none;
+  }
+</style>
+</head>
+<body>
+
+<!-- ══ SETUP SCREEN ══ -->
+<div id="setup" class="screen active">
+  <div class="setup-title">Sub Tracker</div>
+  <div class="setup-sub">Set up your squad, then start the match.</div>
+
+  <div class="roster-preset-bar">
+    <span class="preset-label">Roster:</span>
+    <button class="preset-btn" onclick="loadPreset()">Load my team</button>
+  </div>
+
+  <div class="roster-scroll">
+    <table>
+      <thead><tr>
+        <th style="width:38px">#</th>
+        <th>Name</th>
+        <th style="width:66px">Role</th>
+        <th style="width:28px"></th>
+      </tr></thead>
+      <tbody id="roster-body"></tbody>
+    </table>
+  </div>
+
+  <div class="add-row">
+    <input type="text" id="new-name" placeholder="Player name" maxlength="14"
+      onkeydown="if(event.key==='Enter')addPlayer()">
+    <input type="number" id="new-num" min="1" max="99" placeholder="#" class="num-input">
+    <button class="btn btn-small" onclick="addPlayer()">Add</button>
+  </div>
+
+  <button class="btn btn-primary" onclick="startGame()">Start match →</button>
+  <div class="setup-err" id="setup-err"></div>
+</div>
+
+<!-- ══ GAME SCREEN ══ -->
+<div id="game" class="screen">
+  <div class="top-bar">
+    <span class="timer" id="timer-display">00:00</span>
+    <button class="btn btn-start" id="btn-start" onclick="toggleTimer()">Start</button>
+    <button class="btn btn-reset" onclick="resetTimer()">Reset</button>
+    <button class="btn btn-edit" onclick="goSetup()">Squad</button>
+  </div>
+
+  <div class="stats-row" id="stats-row">
+    <div class="stat"><div class="stat-val">0/7</div><div class="stat-lbl">on pitch</div></div>
+    <div class="stat"><div class="stat-val">00:00</div><div class="stat-lbl">avg</div></div>
+    <div class="stat"><div class="stat-val">00:00</div><div class="stat-lbl">imbalance</div></div>
+  </div>
+
+  <div class="notice" id="notice"></div>
+
+  <div class="suggest-bar">
+    <span class="suggest-text" id="suggest-text"></span>
+    <button class="btn btn-small" onclick="suggestSub()">Who needs time?</button>
+  </div>
+
+  <div class="pitch-wrap" id="pitch-wrap">
+    <div class="pitch-zone">
+      <div class="pitch-zone-label">Attack</div>
+      <div class="pitch-row" id="row-attack"
+        ondragover="rowOver(event,'attack')" ondragleave="rowLeave('attack')" ondrop="rowDrop(event,'attack')"></div>
+    </div>
+    <hr class="pitch-divider">
+    <div class="pitch-zone">
+      <div class="pitch-zone-label">Midfield</div>
+      <div class="pitch-row" id="row-mid"
+        ondragover="rowOver(event,'mid')" ondragleave="rowLeave('mid')" ondrop="rowDrop(event,'mid')"></div>
+    </div>
+    <hr class="pitch-divider">
+    <div class="pitch-zone">
+      <div class="pitch-zone-label">Defence</div>
+      <div class="pitch-row" id="row-def"
+        ondragover="rowOver(event,'def')" ondragleave="rowLeave('def')" ondrop="rowDrop(event,'def')"></div>
+    </div>
+    <hr class="pitch-divider">
+    <div class="pitch-zone" style="flex:0.6">
+      <div class="pitch-row" id="row-gk"
+        ondragover="rowOver(event,'gk')" ondragleave="rowLeave('gk')" ondrop="rowDrop(event,'gk')"></div>
+    </div>
+  </div>
+
+  <div class="bench-wrap">
+    <div class="bench-header">Bench</div>
+    <div class="bench-row" id="zone-bench"
+      ondragover="benchOver(event)" ondragleave="benchLeave()" ondrop="benchDrop(event)"></div>
+  </div>
+
+  <div class="log-wrap">
+    <div class="log-toggle" id="log-toggle" onclick="toggleLog()">
+      <span>Sub log</span><span class="arrow">▾</span>
+    </div>
+    <div class="log-body" id="log-body">
+      <div class="log-empty" id="log-empty">No subs yet</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════
+//  HARDCODED PRESET ROSTER — edit here
+// ══════════════════════════════════════
+const PRESET_ROSTER = [
+  { name: "Alex",   num: 1,  role: "keeper" },
+  { name: "Jordan", num: 2,  role: "field"  },
+  { name: "Sam",    num: 3,  role: "field"  },
+  { name: "Morgan", num: 4,  role: "field"  },
+  { name: "Casey",  num: 5,  role: "field"  },
+  { name: "Riley",  num: 6,  role: "field"  },
+  { name: "Taylor", num: 7,  role: "field"  },
+  { name: "Drew",   num: 8,  role: "field"  },
+];
+
+// ══════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════
+let players = [], nextId = 0;
+let running = false, elapsed = 0, timerRef = null;
+let dragId = null, touchClone = null, touchOffX = 0, touchOffY = 0;
+let subLog = [];
+const MAX = 7;
+const ROWS = ['attack', 'mid', 'def', 'gk'];
+
+// ── Position label logic ──
+function posLabel(zone, idx, total) {
+  if (zone === 'gk')     return 'GK';
+  if (zone === 'bench')  return '';
+  const presets = {
+    def:    { 1:['cb'], 2:['lb','rb'], 3:['lb','cb','rb'], 4:['lb','lcb','rcb','rb'] },
+    mid:    { 1:['cm'], 2:['lm','rm'], 3:['lm','cm','rm'], 4:['lm','lcm','rcm','rm'] },
+    attack: { 1:['s'],  2:['ls','rs'], 3:['lw','s','rw'],  4:['lw','ls','rs','rw']   },
+  };
+  const set = presets[zone] && presets[zone][total];
+  return set ? (set[idx] || '?') : '?';
+}
+
+// ── Formatting ──
+function fmt(s) {
+  s = Math.max(0, Math.round(s));
+  return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+}
+function minsFloor(s) { return Math.floor(Math.max(0, s) / 60); }
+
+// ── Setup helpers ──
+function mkPlayer(d, i) {
+  return { id: i, name: d.name, num: d.num, role: d.role,
+           zone: 'bench', onPitch: false, secs: 0, _base: 0,
+           lastIn: null, stintStart: null, slot: null };
+}
+
+function loadPreset() {
+  players = PRESET_ROSTER.map((d, i) => mkPlayer(d, i));
+  nextId = players.length;
+  renderSetup();
+}
+
+function initEmpty() {
+  players = [];
+  nextId = 0;
+  renderSetup();
+}
+
+function renderSetup() {
+  const tb = document.getElementById('roster-body');
+  tb.innerHTML = '';
+  players.forEach(p => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input type="number" class="num-input" min="1" max="99" value="${p.num}"
+            onchange="updP(${p.id},'num',this.value)"></td>
+      <td><input type="text" maxlength="14" value="${p.name}"
+            onchange="updP(${p.id},'name',this.value)"></td>
+      <td><button class="role-btn ${p.role}" onclick="toggleRole(${p.id})">
+            ${p.role === 'keeper' ? 'Keeper' : 'Field'}</button></td>
+      <td><button class="del-btn" onclick="delP(${p.id})">✕</button></td>`;
+    tb.appendChild(tr);
+  });
+}
+
+function updP(id, f, v) {
+  const p = players.find(q => q.id === id);
+  if (p) p[f] = f === 'num' ? (parseInt(v) || p.num) : v;
+}
+function toggleRole(id) {
+  const p = players.find(q => q.id === id);
+  if (p) { p.role = p.role === 'keeper' ? 'field' : 'keeper'; renderSetup(); }
+}
+function delP(id) { players = players.filter(q => q.id !== id); renderSetup(); }
+function addPlayer() {
+  const n = document.getElementById('new-name').value.trim();
+  if (!n) return;
+  const num = parseInt(document.getElementById('new-num').value) || players.length + 1;
+  players.push(mkPlayer({ name: n, num, role: 'field' }, nextId++));
+  document.getElementById('new-name').value = '';
+  document.getElementById('new-num').value = '';
+  renderSetup();
+}
+
+function assignStartZones() {
+  const zoneOrder = ['gk', 'def', 'def', 'mid', 'mid', 'attack', 'attack'];
+  let zoneCounts = { gk: 0, def: 0, mid: 0, attack: 0 };
+  players.forEach((p, i) => {
+    p.secs = 0; p._base = 0; p.lastIn = null; p.stintStart = null; p.slot = null;
+    if (i < MAX) {
+      p.onPitch = true; p.lastIn = 0; p.stintStart = 0;
+      const z = p.role === 'keeper' ? 'gk' : (zoneOrder[i] || 'mid');
+      p.zone = z;
+      p.slot = zoneCounts[z] || 0;
+      zoneCounts[z] = (zoneCounts[z] || 0) + 1;
+    } else {
+      p.onPitch = false; p.zone = 'bench'; p.slot = null;
+    }
+  });
+}
+
+function startGame() {
+  const err = document.getElementById('setup-err');
+  if (!players.length) { err.textContent = 'Add at least one player.'; return; }
+  if (!players.some(p => p.role === 'keeper')) { err.textContent = 'Assign a keeper.'; return; }
+  err.textContent = '';
+  assignStartZones();
+  subLog = []; elapsed = 0; running = false;
+  document.getElementById('setup').classList.remove('active');
+  document.getElementById('game').classList.add('active');
+  const btn = document.getElementById('btn-start');
+  btn.textContent = 'Start'; btn.className = 'btn btn-start';
+  document.getElementById('timer-display').textContent = '00:00';
+  document.getElementById('suggest-text').textContent = '';
+  renderGame();
+}
+
+function goSetup() {
+  if (running) toggleTimer();
+  document.getElementById('game').classList.remove('active');
+  document.getElementById('setup').classList.add('active');
+  renderSetup();
+}
+
+// ── Timer ──
+function toggleTimer() {
+  const btn = document.getElementById('btn-start');
+  if (!running) {
+    running = true;
+    const t0 = Date.now() - elapsed * 1000;
+    players.forEach(p => {
+      if (p.onPitch && p.lastIn === null) { p.lastIn = elapsed; p._base = p.secs; p.stintStart = elapsed; }
+    });
+    timerRef = setInterval(() => {
+      elapsed = Math.round((Date.now() - t0) / 1000);
+      players.forEach(p => { if (p.onPitch && p.lastIn !== null) p.secs = p._base + (elapsed - p.lastIn); });
+      document.getElementById('timer-display').textContent = fmt(elapsed);
+      renderStats(); renderPlayers();
+    }, 500);
+    btn.textContent = 'Pause'; btn.className = 'btn btn-pause';
+  } else {
+    running = false; clearInterval(timerRef);
+    players.forEach(p => { if (p.onPitch && p.lastIn !== null) p._base = p.secs; });
+    btn.textContent = 'Resume'; btn.className = 'btn btn-resume';
+  }
+}
+
+function resetTimer() {
+  running = false; clearInterval(timerRef); elapsed = 0;
+  players.forEach(p => { p.secs = 0; p._base = 0; p.lastIn = p.onPitch ? 0 : null; p.stintStart = p.onPitch ? 0 : null; });
+  subLog = [];
+  const btn = document.getElementById('btn-start');
+  btn.textContent = 'Start'; btn.className = 'btn btn-start';
+  document.getElementById('timer-display').textContent = '00:00';
+  document.getElementById('suggest-text').textContent = '';
+  renderGame();
+}
+
+// ── Render ──
+function renderStats() {
+  const field = players.filter(p => p.role === 'field');
+  const onCount = players.filter(p => p.onPitch).length;
+  const avg = field.length ? Math.round(field.reduce((a, p) => a + p.secs, 0) / field.length) : 0;
+  const times = field.map(p => p.secs);
+  const imbal = times.length > 1 ? Math.max(...times) - Math.min(...times) : 0;
+  document.getElementById('stats-row').innerHTML = `
+    <div class="stat"><div class="stat-val">${onCount}/${MAX}</div><div class="stat-lbl">on pitch</div></div>
+    <div class="stat"><div class="stat-val">${fmt(avg)}</div><div class="stat-lbl">avg (field)</div></div>
+    <div class="stat"><div class="stat-val ${imbal > 120 ? 'warn' : ''}">${fmt(imbal)}</div><div class="stat-lbl">imbalance</div></div>`;
+}
+
+function zoneOrdered(zone) {
+  return players.filter(p => p.zone === zone).sort((a, b) => (a.slot || 0) - (b.slot || 0));
+}
+
+function playerCard(p, pos) {
+  const totalMins = minsFloor(p.secs);
+  const stintMins = p.onPitch && p.stintStart !== null ? minsFloor(elapsed - p.stintStart) : null;
+  let timeLine = '';
+  if (p.role === 'keeper') timeLine = '';
+  else if (stintMins !== null) timeLine = `${totalMins}m · +${stintMins}m`;
+  else timeLine = `${totalMins}m`;
+
+  return `<div class="player ${p.onPitch ? 'on-pitch' : 'on-bench'}${p.role === 'keeper' ? ' keeper' : ''}" id="pc${p.id}"
+    draggable="true"
+    ondragstart="dragStart(event,${p.id})"
+    ondragend="dragEnd(${p.id})"
+    ondragover="playerOver(event,${p.id})"
+    ondragleave="playerLeave(${p.id})"
+    ondrop="playerDrop(event,${p.id})"
+    ontouchstart="touchStart(event,${p.id})"
+    ontouchmove="touchMove(event)"
+    ontouchend="touchEnd(event,${p.id})">
+    <span class="p-pos">${pos}</span>
+    <span class="p-name">${p.name}</span>
+    <span class="p-time">${timeLine}</span>
+  </div>`;
+}
+
+function renderPlayers() {
+  ROWS.forEach(zone => {
+    const el = document.getElementById('row-' + zone);
+    const ordered = zoneOrdered(zone);
+    el.innerHTML = ordered.map((p, i) => playerCard(p, posLabel(zone, i, ordered.length))).join('');
+  });
+  const bench = document.getElementById('zone-bench');
+  const bp = zoneOrdered('bench');
+  bench.innerHTML = bp.length
+    ? bp.map(p => playerCard(p, '')).join('')
+    : '<span style="font-size:11px;color:#bbb">Empty</span>';
+}
+
+function renderSubLog() {
+  const body = document.getElementById('log-body');
+  const empty = document.getElementById('log-empty');
+  if (!subLog.length) {
+    empty.style.display = 'block';
+    body.querySelectorAll('.log-entry').forEach(e => e.remove());
+  } else {
+    empty.style.display = 'none';
+    body.innerHTML = subLog.slice().reverse()
+      .map(e => `<div class="log-entry">${e}</div>`).join('');
+  }
+}
+
+function renderGame() { renderStats(); renderPlayers(); renderSubLog(); }
+
+function toggleLog() {
+  const toggle = document.getElementById('log-toggle');
+  const body = document.getElementById('log-body');
+  const open = body.classList.toggle('open');
+  toggle.classList.toggle('open', open);
+}
+
+function showNotice(msg) {
+  const el = document.getElementById('notice');
+  el.textContent = msg; el.style.display = 'block';
+  clearTimeout(el._t); el._t = setTimeout(() => el.style.display = 'none', 2500);
+}
+
+function pitchCount() { return players.filter(p => p.onPitch).length; }
+function getDragging() { return players.find(p => p.id === dragId) || null; }
+
+// ── Move / swap ──
+function moveToZone(id, toZone) {
+  const p = players.find(q => q.id === id);
+  if (!p || p.zone === toZone) return false;
+  const fromBench = p.zone === 'bench', toBench = toZone === 'bench';
+  if (fromBench && !toBench && pitchCount() >= MAX) { showNotice('Pitch full — move someone off first.'); return false; }
+  const wasOn = p.onPitch, nowOn = !toBench;
+  if (!wasOn && nowOn) {
+    const existing = players.filter(q => q.zone === toZone && q.id !== id);
+    p.slot = existing.length > 0 ? Math.max(...existing.map(q => q.slot || 0)) + 1 : 0;
+    p.lastIn = elapsed; p._base = p.secs; p.stintStart = elapsed;
+    subLog.push(`${fmt(elapsed)} — ${p.name} ON → ${toZone}`);
+  } else if (wasOn && !nowOn) {
+    if (running) p._base = p.secs;
+    p.lastIn = null; p.stintStart = null; p.slot = null;
+    subLog.push(`${fmt(elapsed)} — ${p.name} OFF (total ${fmt(p.secs)})`);
+  } else {
+    const existing = players.filter(q => q.zone === toZone && q.id !== id);
+    p.slot = existing.length > 0 ? Math.max(...existing.map(q => q.slot || 0)) + 1 : 0;
+  }
+  p.zone = toZone; p.onPitch = nowOn;
+  return true;
+}
+
+function swapPlayers(idA, idB) {
+  const a = players.find(p => p.id === idA), b = players.find(p => p.id === idB);
+  if (!a || !b || idA === idB || a.zone === b.zone) return;
+  const onA = a.onPitch, onB = b.onPitch;
+  const now = elapsed;
+  const zoneA = a.zone, slotA = a.slot, zoneB = b.zone, slotB = b.slot;
+
+  if (onA && !onB) {
+    if (running) a._base = a.secs;
+    a.lastIn = null; a.stintStart = null; a.onPitch = false; a.zone = zoneB; a.slot = slotB;
+    b.lastIn = now; b._base = b.secs; b.stintStart = now; b.onPitch = true; b.zone = zoneA; b.slot = slotA;
+    subLog.push(`${fmt(now)} — ${b.name} ON / ${a.name} OFF (total ${fmt(a.secs)})`);
+  } else if (!onA && onB) {
+    if (running) b._base = b.secs;
+    b.lastIn = null; b.stintStart = null; b.onPitch = false; b.zone = zoneA; b.slot = slotA;
+    a.lastIn = now; a._base = a.secs; a.stintStart = now; a.onPitch = true; a.zone = zoneB; a.slot = slotB;
+    subLog.push(`${fmt(now)} — ${a.name} ON / ${b.name} OFF (total ${fmt(b.secs)})`);
+  } else {
+    a.zone = zoneB; a.slot = slotB;
+    b.zone = zoneA; b.slot = slotA;
+  }
+  clearHL(); renderGame();
+}
+
+// ── Drag (desktop) ──
+function clearHL() {
+  players.forEach(p => { const el = document.getElementById('pc' + p.id); if (el) el.classList.remove('drop-target'); });
+  ROWS.forEach(r => { const el = document.getElementById('row-' + r); if (el) { el.classList.remove('drag-over'); el.classList.remove('drop-blocked'); } });
+  const b = document.getElementById('zone-bench'); if (b) b.classList.remove('drag-over');
+}
+
+function dragStart(e, id) {
+  dragId = id; e.dataTransfer.setData('text', String(id));
+  setTimeout(() => { const el = document.getElementById('pc' + id); if (el) el.classList.add('dragging'); }, 0);
+}
+function dragEnd(id) { dragId = null; const el = document.getElementById('pc' + id); if (el) el.classList.remove('dragging'); clearHL(); }
+function playerOver(e, id) { e.preventDefault(); e.stopPropagation(); if (dragId === null || dragId === id) return; const el = document.getElementById('pc' + id); if (el) el.classList.add('drop-target'); }
+function playerLeave(id) { const el = document.getElementById('pc' + id); if (el) el.classList.remove('drop-target'); }
+function playerDrop(e, id) { e.preventDefault(); e.stopPropagation(); const from = parseInt(e.dataTransfer.getData('text')); if (!isNaN(from) && from !== id) swapPlayers(from, id); else clearHL(); }
+
+function rowOver(e, zone) {
+  e.preventDefault();
+  const dr = getDragging(), el = document.getElementById('row-' + zone);
+  if (!el || !dr) return;
+  const blocked = dr.zone === 'bench' && pitchCount() >= MAX;
+  el.classList.toggle('drag-over', !blocked); el.classList.toggle('drop-blocked', blocked);
+}
+function rowLeave(zone) { const el = document.getElementById('row-' + zone); if (el) { el.classList.remove('drag-over'); el.classList.remove('drop-blocked'); } }
+function rowDrop(e, zone) {
+  e.preventDefault(); const id = parseInt(e.dataTransfer.getData('text'));
+  if (isNaN(id)) return;
+  const p = players.find(q => q.id === id); if (!p || p.zone === zone) { clearHL(); return; }
+  moveToZone(id, zone); clearHL(); renderGame();
+}
+function benchOver(e) { e.preventDefault(); document.getElementById('zone-bench').classList.add('drag-over'); }
+function benchLeave() { document.getElementById('zone-bench').classList.remove('drag-over'); }
+function benchDrop(e) {
+  e.preventDefault(); document.getElementById('zone-bench').classList.remove('drag-over');
+  const id = parseInt(e.dataTransfer.getData('text')); if (!isNaN(id)) moveToZone(id, 'bench');
+  clearHL(); renderGame();
+}
+
+// ── Touch drag ──
+function touchStart(e, id) {
+  dragId = id;
+  const el = e.currentTarget, r = el.getBoundingClientRect();
+  touchOffX = e.touches[0].clientX - r.left; touchOffY = e.touches[0].clientY - r.top;
+  touchClone = el.cloneNode(true);
+  touchClone.style.cssText = `position:fixed;width:${r.width}px;height:${r.height}px;opacity:0.85;pointer-events:none;z-index:999;left:${r.left}px;top:${r.top}px;border-radius:7px`;
+  document.body.appendChild(touchClone); el.classList.add('dragging'); e.preventDefault();
+}
+function touchMove(e) {
+  if (!touchClone) return;
+  const t = e.touches[0];
+  touchClone.style.left = (t.clientX - touchOffX) + 'px';
+  touchClone.style.top  = (t.clientY - touchOffY) + 'px';
+  e.preventDefault();
+}
+function touchEnd(e, id) {
+  if (!touchClone) return;
+  touchClone.remove(); touchClone = null;
+  const el = document.getElementById('pc' + id); if (el) el.classList.remove('dragging');
+  const t = e.changedTouches[0];
+  const hit = document.elementFromPoint(t.clientX, t.clientY);
+  const tPid = findPid(hit), tZone = findZone(hit);
+  if (tPid !== null && tPid !== id) swapPlayers(id, tPid);
+  else if (tZone) moveToZone(id, tZone);
+  dragId = null; clearHL(); renderGame(); e.preventDefault();
+}
+function findPid(el) { let c = el; while (c) { if (c.id && c.id.startsWith('pc')) { const n = parseInt(c.id.slice(2)); if (!isNaN(n)) return n; } c = c.parentElement; } return null; }
+function findZone(el) {
+  let c = el;
+  while (c) {
+    if (c.id === 'row-attack') return 'attack'; if (c.id === 'row-mid') return 'mid';
+    if (c.id === 'row-def')    return 'def';    if (c.id === 'row-gk')  return 'gk';
+    if (c.id === 'zone-bench') return 'bench';
+    c = c.parentElement;
+  } return null;
+}
+
+// ── Suggest sub ──
+function suggestSub() {
+  const bench = players.filter(p => p.role === 'field' && !p.onPitch);
+  const onField = players.filter(p => p.role === 'field' && p.onPitch);
+  const el = document.getElementById('suggest-text');
+  if (!bench.length)   { el.textContent = 'No field players on bench.'; return; }
+  if (!onField.length) { el.textContent = 'No field players on pitch.'; return; }
+  const needsOn  = bench.reduce((a, b)   => a.secs <= b.secs ? a : b);
+  const takeOff  = onField.reduce((a, b) => a.secs >= b.secs ? a : b);
+  el.innerHTML = `Sub <b>${takeOff.name}</b> (${minsFloor(takeOff.secs)}m) → <b>${needsOn.name}</b> (${minsFloor(needsOn.secs)}m)`;
+}
+
+// ── Prevent all page-level scroll/zoom ──
+document.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+document.addEventListener('gesturestart', e => e.preventDefault());
+
+// ── Init ──
+initEmpty();
+</script>
+</body>
+</html>
