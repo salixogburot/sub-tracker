@@ -199,6 +199,13 @@
     <button class="preset-btn" onclick="loadPreset()">Load my team</button>
   </div>
 
+  <div class="roster-preset-bar">
+    <span class="preset-label">Duration:</span>
+    <input type="number" id="match-mins" min="10" max="120" placeholder="min"
+      style="width:60px;border:1px solid #d8d5d0;border-radius:7px;padding:5px 7px;font-size:13px;background:#fff;-webkit-appearance:none;appearance:none;text-align:center;">
+    <span class="preset-label">min</span>
+  </div>
+
   <div class="roster-scroll">
     <table>
       <thead><tr>
@@ -304,6 +311,7 @@ const PRESET_ROSTER = [
 //  STATE
 // ══════════════════════════════════════
 let players = [], nextId = 0;
+let matchMins = 0;
 let running = false, elapsed = 0, timerRef = null;
 let dragId = null, touchClone = null, touchOffX = 0, touchOffY = 0;
 let subLog = [];
@@ -407,6 +415,7 @@ function startGame() {
   if (!players.length) { err.textContent = 'Add at least one player.'; return; }
   if (!players.some(p => p.role === 'keeper')) { err.textContent = 'Assign a keeper.'; return; }
   err.textContent = '';
+  matchMins = parseInt(document.getElementById('match-mins').value) || 0;
   assignStartZones();
   subLog = []; elapsed = 0; running = false;
   document.getElementById('setup').classList.remove('active');
@@ -466,10 +475,16 @@ function renderStats() {
   const avg = field.length ? Math.round(field.reduce((a, p) => a + p.secs, 0) / field.length) : 0;
   const times = field.map(p => p.secs);
   const imbal = times.length > 1 ? Math.max(...times) - Math.min(...times) : 0;
+  const targetSecs = matchMins > 0 && field.length > 0
+    ? Math.round((matchMins * 60 * (MAX - 1)) / field.length) : 0;
+  const targetStat = targetSecs > 0
+    ? `<div class="stat"><div class="stat-val">${fmt(targetSecs)}</div><div class="stat-lbl">target ea.</div></div>`
+    : '';
   document.getElementById('stats-row').innerHTML = `
     <div class="stat"><div class="stat-val">${onCount}/${MAX}</div><div class="stat-lbl">on pitch</div></div>
     <div class="stat"><div class="stat-val">${fmt(avg)}</div><div class="stat-lbl">avg (field)</div></div>
-    <div class="stat"><div class="stat-val ${imbal > 120 ? 'warn' : ''}">${fmt(imbal)}</div><div class="stat-lbl">imbalance</div></div>`;
+    <div class="stat"><div class="stat-val ${imbal > 120 ? 'warn' : ''}">${fmt(imbal)}</div><div class="stat-lbl">imbalance</div></div>
+    ${targetStat}`;
 }
 
 function zoneOrdered(zone) {
@@ -550,6 +565,16 @@ function moveToZone(id, toZone) {
   if (!p || p.zone === toZone) return false;
   const fromBench = p.zone === 'bench', toBench = toZone === 'bench';
   if (fromBench && !toBench && pitchCount() >= MAX) { showNotice('Pitch full — move someone off first.'); return false; }
+
+  // Role changes when crossing the GK zone boundary
+  const becameField = p.zone === 'gk' && toZone !== 'gk' && p.role === 'keeper';
+  const secsAsGK = becameField ? p.secs : 0;
+  if (toZone === 'gk' && p.role !== 'keeper') {
+    p.role = 'keeper';
+  } else if (becameField) {
+    p.role = 'field'; p.secs = 0; p._base = 0;
+  }
+
   const wasOn = p.onPitch, nowOn = !toBench;
   if (!wasOn && nowOn) {
     const existing = players.filter(q => q.zone === toZone && q.id !== id);
@@ -559,10 +584,13 @@ function moveToZone(id, toZone) {
   } else if (wasOn && !nowOn) {
     if (running) p._base = p.secs;
     p.lastIn = null; p.stintStart = null; p.slot = null;
-    subLog.push(`${fmt(elapsed)} — ${p.name} OFF (total ${fmt(p.secs)})`);
+    const note = becameField ? ` (GK→Field, was ${fmt(secsAsGK)})` : ` (total ${fmt(p.secs)})`;
+    subLog.push(`${fmt(elapsed)} — ${p.name} OFF${note}`);
   } else {
     const existing = players.filter(q => q.zone === toZone && q.id !== id);
     p.slot = existing.length > 0 ? Math.max(...existing.map(q => q.slot || 0)) + 1 : 0;
+    if (becameField) subLog.push(`${fmt(elapsed)} — ${p.name} GK → Field`);
+    else if (toZone === 'gk') subLog.push(`${fmt(elapsed)} — ${p.name} → GK`);
   }
   p.zone = toZone; p.onPitch = nowOn;
   return true;
@@ -575,19 +603,36 @@ function swapPlayers(idA, idB) {
   const now = elapsed;
   const zoneA = a.zone, slotA = a.slot, zoneB = b.zone, slotB = b.slot;
 
+  // Role changes when one player is in the GK zone
+  const aWasGK = zoneA === 'gk', bWasGK = zoneB === 'gk';
+  const aPreSecs = a.secs, bPreSecs = b.secs;
+  if (aWasGK && !bWasGK) {
+    if (a.role === 'keeper') { a.role = 'field'; a.secs = 0; a._base = 0; }
+    if (b.role !== 'keeper') b.role = 'keeper';
+  } else if (bWasGK && !aWasGK) {
+    if (b.role === 'keeper') { b.role = 'field'; b.secs = 0; b._base = 0; }
+    if (a.role !== 'keeper') a.role = 'keeper';
+  }
+
   if (onA && !onB) {
     if (running) a._base = a.secs;
     a.lastIn = null; a.stintStart = null; a.onPitch = false; a.zone = zoneB; a.slot = slotB;
     b.lastIn = now; b._base = b.secs; b.stintStart = now; b.onPitch = true; b.zone = zoneA; b.slot = slotA;
-    subLog.push(`${fmt(now)} — ${b.name} ON / ${a.name} OFF (total ${fmt(a.secs)})`);
+    const aNote = aWasGK ? ` (GK→Field, was ${fmt(aPreSecs)})` : ` (total ${fmt(a.secs)})`;
+    subLog.push(`${fmt(now)} — ${b.name} ON / ${a.name} OFF${aNote}`);
   } else if (!onA && onB) {
     if (running) b._base = b.secs;
     b.lastIn = null; b.stintStart = null; b.onPitch = false; b.zone = zoneA; b.slot = slotA;
     a.lastIn = now; a._base = a.secs; a.stintStart = now; a.onPitch = true; a.zone = zoneB; a.slot = slotB;
-    subLog.push(`${fmt(now)} — ${a.name} ON / ${b.name} OFF (total ${fmt(b.secs)})`);
+    const bNote = bWasGK ? ` (GK→Field, was ${fmt(bPreSecs)})` : ` (total ${fmt(b.secs)})`;
+    subLog.push(`${fmt(now)} — ${a.name} ON / ${b.name} OFF${bNote}`);
   } else {
     a.zone = zoneB; a.slot = slotB;
     b.zone = zoneA; b.slot = slotA;
+    if (aWasGK || bWasGK) {
+      const newGK = aWasGK ? b.name : a.name, oldGK = aWasGK ? a.name : b.name;
+      subLog.push(`${fmt(now)} — Keeper change: ${newGK} ↔ ${oldGK}`);
+    }
   }
   clearHL(); renderGame();
 }
